@@ -110,3 +110,16 @@ Afero is a filesystem abstraction library.
 
 If use of the `os.FileMode` and `os.FileInfo` abstractions was acceptable, I'd much prefer to use the billy library, due to its overall focus on coherent abstraction.
 Given that it's not, afero is doubly out the window, for having the same limitations, and a lot more.
+
+### Why not 'rio'?
+
+https://github.com/polydawn/rio/tree/master/fs
+
+Rio has a filesystem abstraction package.
+
+Same author.  Hi.
+
+I thought I might be able to do it even better by giving it another shot, and including practical lessons learned from the prior.
+
+Also, this library is (obviously) starting out as a new, free-standing repository.  Suggesting folks form a relationship with the whole `rio` repo just for its `fs` package is a bit silly.
+Hopefully the barrier here will be lower.  Small, reusable parts are good.
