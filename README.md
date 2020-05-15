@@ -123,3 +123,9 @@ I thought I might be able to do it even better by giving it another shot, and in
 
 Also, this library is (obviously) starting out as a new, free-standing repository.  Suggesting folks form a relationship with the whole `rio` repo just for its `fs` package is a bit silly.
 Hopefully the barrier here will be lower.  Small, reusable parts are good.
+
+
+License
+-------
+
+SPDX-License-Identifier: Apache-2.0 OR MIT
