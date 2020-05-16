@@ -23,12 +23,15 @@ import (
 // the backing store is, and enforce it using mechanisms that work across
 // all possible ways of accessing that backing store.
 //
+// TODO(ws): rename 'Root' or 'Chroot' for more compatible metaphor?
 type Cabinet interface {
+	// TODO(ws): how does this error / fail?
 	Open() Handle
 }
 
 type Handle interface {
 	Kind() Kind
+	// TODO(ws): how does this error / fail? returns nil if not applicable?
 	Dir() Dir
 	Reader() io.Reader // Works for readable files; returns an erroring thunk for dirs.
 	Writer() io.Writer // Works for writable files; returns an erroring thunk for dirs or read-only files.
@@ -39,6 +42,7 @@ type (
 	// Kind is an enum.
 	// Its members are the `Kind_*` types.
 	Kind interface {
+		// TODO(ws): why the '_Kind' method?
 		_Kind()
 		String() string
 		GoString() string
