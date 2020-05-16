@@ -24,20 +24,30 @@ import (
 // the backing store is, and enforce it using mechanisms that work across
 // all possible ways of accessing that backing store.
 //
+// REVIEW: name: file.Tree?  file.Root?  file.Subtree?
+// Want to avoid connotations of "mount", or "drive" -- isn't necessarily either;
+// doesn't necessarily hold any of the data (like total size, for a random example) you'd expect to be able to get from such a thing.
+//
+// REVIEW: Is it even distinct from Handle?  Perhaps not!
+// Maybe we'll end up with some things that are best done with interface detection?
+// Maybe being able to ask what cabinet (root, tree, forest, whatever) a handle belongs to will be useful?
 type Cabinet interface {
-	Open() Handle
+	OpenRoot() (Handle, error)
+
+	// REVIEW: dislike putting this in a "global" place, but does it really make sense to put it on Dirs or anything else?
+	//   The function would have to error if the destination was in a different cabinet.  Or the path resolution ... handles would have to keep.... oioioi.
+	//   And it doesn't apply to an _open_ handle.  (This... is a whole Thing to follow up on.  The kernel in linux certainly does have variations of calling the syscalls with fds.  It's the golang os package that drops this, afaict.)
+	//
+	// REVIEW: maybe putting this on cabinet is the error... and what we should pursue is having something that can act a bit like a cursor, but only on paths (no open handles).
+	Rename(old Path, dest Path) error
 }
 
 type Handle interface {
 	Kind() Kind
 	ReadMetadata(*Metadata) *Metadata // Reads metadata -- if a pointer is given as a param, it will be modified and the same pointer returned; or, if given nil, will return a newly allocated structure.
+	File() File                       // File specializes the value into the File interface, or panics if the Kind is incorrect.  (You could also do this by casting, but this method provides a better error.)
 	Dir() Dir                         // Dir specializes the value into a Dir, or panics if the Kind is incorrect.  (You could also do this by casting, but this method provides a better error.)
-
-	Reader() io.Reader // Works for readable files; returns an erroring thunk for dirs.
-	Writer() io.Writer // Works for writable files; returns an erroring thunk for dirs or read-only files.
-	io.Closer          // Works for anything -- files, dirs, etc -- all handles have a 'Close' operation.
-	// todo add seek, etc, methods.
-	// consider putting these behind an interface+specialization method similar to what we do for Dir.
+	io.Closer                         // Close is an operation defined on all kinds of handle.
 
 	Xattrs() Xattrs // Returns an interface that can be used to access "extended attributes".
 }
@@ -87,11 +97,64 @@ func (Kind_Socket) GoString() string      { return "file.Kind_Socket" }
 func (Kind_BlockDevice) GoString() string { return "file.Kind_Device" }
 func (Kind_CharDevice) GoString() string  { return "file.Kind_CharDevice" }
 
-type Dir interface {
-	// dir reading methods.
-	// as well as 'open' with a single name (not path) param, i'd hope.
-	// might as well cache a path?  i can't imagine refusal to do so would often save a meaningful piece of energy.
+type File interface {
+	io.Writer
+	io.Reader
+	io.ReaderAt
+	io.Seeker
+	io.Closer
 }
+
+type Dir interface {
+	// TODO: this doens't contain enough info for all kinds.  have extended options field?  use builder chain?  design decision.
+	//
+	// REVIEW: several (radically different) alternative ways we could go about this:
+	// - Separate CreateFoo methods, one for each Kind
+	// - Take the _entire_ Metadata struct as a param
+	//   - ...this does *not* map onto a single atomic syscall on linux -- but is that what we want to orient this API around?  perhaps not.
+	//   - ...this does *not* pleasantly address that different details are relevant per kind (linkname only sane for symlinks; dev numbers for devs, etc).
+	// - Do builder chains
+	// - Do some form of complex extended options field (functional options potentially too costly, but, something in that vein).
+	// Remember: we *can* add "porcelain" layers to this as a functional API.  This can be resigned to being a plumbing interface, if that's appropriate and constructive (and leads to speed).
+	Create(name Name, omode Openmode, kind Kind) (Handle, error)
+
+	Open(name Name, omode Openmode) (Handle, error)
+
+	Read() DirItr
+
+	io.Closer
+
+	// REVIEW: Does Dir (or Handle, for that matter) cache the Path used to create it?  Undetermined.
+	//  Possibly useful, yes.  Otoh: makes efficient walks *much* harder (can't so easily loan out PathBuffer contents and expect it to be brief).
+	//  Would rather not be forced to cache the Path.  Also makes some implications that aren't super truthy.  Undecided how else to handle yet, though.
+	//   Some sort of design that does gives a reasonable way to have cursors over paths, and hold the handles in parallel, might be desirable.  (See similar remarks esp on Rename functions.)
+}
+
+type DirItr interface {
+	Next() (Name, *Metadata, error) // REVIEW: metadata?  do you always have it?  This is a case where loading Metadata.Linkname immediately (at the cost of an extra syscall) might be undesirable.
+	NextBrief() (Name, error)       // REVIEW: maybe these two variations of iteration solve the above problem.  Also saves flipping the whole Metadata struct, in case that's a concern.
+	Done() bool
+
+	// FUTURE: are there 'seek' methods we can support on this?  (I don't think there are for many filesystems, so if so, this might be an interface feature detection thing.)
+
+	// Implementation note: your DirItr implementation should probably consider embedding a Metadata struct;
+	//  it can then just keep returning a pointer to it during all responses to 'Next', and thereby never allocating.
+}
+
+type (
+	Openmode interface {
+		_Openmode()
+	}
+
+	// REVIEW: this is... going to be syntactically irritating to _users_ in a way that doing the kind enum wasn't.  People regularly bitmask these together and that's convenient.
+	//   We need an equally convenient set-aggregating syntax, one way or another.  And ideally it's similarly cheap (zeroalloc).
+
+	Openmode_Create   struct{}
+	Openmode_Truncate struct{}
+	Openmode_Readable struct{}
+	Openmode_Writable struct{}
+	// ... etc ...
+)
 
 type Metadata struct {
 	Perms    Mode      // permission bits
