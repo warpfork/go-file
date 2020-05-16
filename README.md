@@ -15,8 +15,8 @@ There are, yes, lots of other libraries that have approached this problem.
 
 The major differences between go-file and other libraries are:
 
-- we're embracing POSIX and most of its details (such as uid, gid, etc) -- whereas many other libraries try to smooth over those properties and pretend they don't exist.
-- we're leaning into the Go type system to make as many errors compile-time impossible as we can (most essential types have constructors that enforce correctness of parameters, rather than shrugging and allowing create-by-casting).
+- we're embracing POSIX and most of its details (such as uid, gid, etc) -- whereas many other libraries get to the `Stat` call, realize this is hard, and try to make do with the `os.FileInfo` interface to poor effect.
+- we're leaning into the Go type system to make as many errors visible at compile-time as we can (most essential types have constructors that enforce correctness of parameters, rather than shrugging and allowing create-by-casting).
 - a major intention of this library is to make it possible to reason about posix-style metadata of files, _regardless_ of what system you compiled on (e.g., the `syscall` package is *not* acceptable for any of our public APIs).
 
 (And yes, if a cast that peeks into the `syscall` package is sufficiently commonly used by users to get at some important detail,
@@ -59,11 +59,8 @@ A couple qualms:
 		- It's too prone to bitmath, and not all the bits are what you'd expect;
 		- it's hard to use it to help enforce whole-program correctness since you can cast to it too easily;
 		- and it's just plain irritating to use as a bonus: the check for "is this a plain file", _the most common thing you'll ever check_, gets bitmathy (you check that a mask of it is equal to zero).  Ick.
-	- means you import the whole `os` package.
-		- Honestly, maybe this isn't that big of a deal in any practical sense.  But it still makes me feel... dirty.
 
 2. It uses the `os.FileInfo` abstraction, which...
-	- repeats the qualm about importing the whole `os` package.
 	- is _not **enough**_.
 		- `os.FileInfo` doesn't include uid or gid, for example.  Many applications I work on require that info.
 		- While you can still get the relevant info through the `fi.Sys() interface{}` and then cast it to `syscall.Stat_t`...
@@ -83,7 +80,9 @@ https://godoc.org/net/http#FileSystem
 
 The `net/http` package has a brief filesystem interface.  It _does_ make it possible to generate in-memory representations of filesystems.
 
-However, it's a very (very) minimal interface.  It doesn't even come close to satisfying our needs around thorough handling of POSIX metadata, etc.
+However, it's a very (very) minimal interface.
+It's aimed at being enough for a webdav-style file system.
+It doesn't even come close to satisfying our needs around thorough handling of POSIX metadata, etc.
 
 This is okay!  It's no insult to that package.  It just does exactly what the `net/http` package needed, and no more.  This is good design in action.
 It's just also not what we needed when we wrote go-file.
