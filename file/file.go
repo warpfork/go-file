@@ -2,6 +2,7 @@ package file
 
 import (
 	"io"
+	"time"
 )
 
 // Cabinet is access to a swatch of a filesystem.
@@ -29,10 +30,16 @@ type Cabinet interface {
 
 type Handle interface {
 	Kind() Kind
-	Dir() Dir
+	ReadMetadata(*Metadata) *Metadata // Reads metadata -- if a pointer is given as a param, it will be modified and the same pointer returned; or, if given nil, will return a newly allocated structure.
+	Dir() Dir                         // Dir specializes the value into a Dir, or panics if the Kind is incorrect.  (You could also do this by casting, but this method provides a better error.)
+
 	Reader() io.Reader // Works for readable files; returns an erroring thunk for dirs.
 	Writer() io.Writer // Works for writable files; returns an erroring thunk for dirs or read-only files.
 	io.Closer          // Works for anything -- files, dirs, etc -- all handles have a 'Close' operation.
+	// todo add seek, etc, methods.
+	// consider putting these behind an interface+specialization method similar to what we do for Dir.
+
+	Xattrs() Xattrs // Returns an interface that can be used to access "extended attributes".
 }
 
 type (
@@ -86,13 +93,36 @@ type Dir interface {
 	// might as well cache a path?  i can't imagine refusal to do so would often save a meaningful piece of energy.
 }
 
-type Metadata interface {
-	// ?
-	// this might actually be concrete
+type Metadata struct {
+	Perms    Mode      // permission bits
+	Uid      uint32    // user id of owner
+	Gid      uint32    // group id of owner
+	Size     int64     // length in bytes
+	Linkname string    // if symlink: target of link
+	Devmajor int64     // major number of character or block device
+	Devminor int64     // minor number of character or block device
+	Ctime    time.Time // time of "creation"
+	Mtime    time.Time // time of modification
+	Atime    time.Time // time of access
 
-	// a bit undecided on where to load it from, too.
-	// it seems reasonable to have a 'handle.Metadata()' access path.
-	// but plumbing mode should also certainly be able to fill and refill these without allocations when doing iteration over a dir.
+	// Note that some of the time fields come with major caveats on any practical system:
+	//  - ctime -- generally cannot be *set*, only read.
+	//  - atime -- does not necessary represent the last access
+	//      (many filesystems have settings like "noatime" or "relatime"
+	//        which minimize the setting of atime for performance reasons).
+	//      Can be set (though it's often of dubious practical utility to do so).
+
+	// Xattrs are *absent* from this structure.
+	//  Xattrs demand significantly more effort to read on most real-world filesystems than the rest of this structure
+	//   (e.g., on linux, a syscall *per attribute read* is required -- the cost scales linearly);
+	//  therefore we do not engage in those costly operations without direct request,
+	//  and that direct request goes through another interface than this.
+}
+
+type Xattrs interface {
+	Supported() bool
+	Enumerate() []string
+	Lookup(k string) string
 }
 
 // Mode tracks the familiar posixy 0777 bitmask.
