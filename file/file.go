@@ -24,7 +24,7 @@ import (
 // the backing store is, and enforce it using mechanisms that work across
 // all possible ways of accessing that backing store.
 //
-// REVIEW: name: file.Tree?  file.Root?  file.Subtree?
+// REVIEW: name: file.Tree?  file.Root?  file.Subtree?  file.Zone?
 // Want to avoid connotations of "mount", or "drive" -- isn't necessarily either;
 // doesn't necessarily hold any of the data (like total size, for a random example) you'd expect to be able to get from such a thing.
 //
