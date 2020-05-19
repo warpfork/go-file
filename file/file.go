@@ -50,6 +50,20 @@ type Handle interface {
 	io.Closer                         // Close is an operation defined on all kinds of handle.
 
 	Xattrs() Xattrs // Returns an interface that can be used to access "extended attributes".
+
+	MoveToHandle(f Dir)
+	MoveToPath(p Path) // TODO definition of path resolution: resolved relative what?  myself?  the cabinet root?  we probably don't want to pass "/" through to the backing store directly, ever, do we?
+
+	// For all implementors that lack a native mechanism for handle-based operations,
+	//  they may choose to report that the operation is not supported,
+	//  or they may choose to create the relevant operations synthetically.
+	//   (osfs, for example, does both -- depending on a flag you provide at Cabinet creation time).
+	// When the operations are created synthetically, it _may differ in behavior under concurrent use_,
+	//  including _concurrent use of the backing store_ (which is out of our ability to either control or even see)
+	//   from what a native handle-based operation would perform.
+	// Using osfs again as an example: because the os package only supports Rename operations in terms of paths,
+	//  the MoveToPath and MoveToHandle functions are both implemented by the osfs.Handle type recalling the Path that was used to reach them.
+	//   This is only correct if the filesystem hasn't changed around the handle (it's possible doing the real kernel 'do_renameat2' operations on file descriptors would have different results).
 }
 
 type (
